@@ -318,3 +318,39 @@ function _git_index_tab_completion() {
   return 0
 }
 
+function _zsh_git_index_tab_completion() {
+  _check_git_index
+  local curw
+  curw="$@"
+  IFS=$'\n'
+  reply=()
+
+  # If the first part of $curw matches a high-level directory,
+  # then match on sub-directories for that project
+  local project=$(dirname $curw)
+  local base_path=$(\grep "/$project$" "$GIT_REPO_DIR/.git_index" | sed 's/ /\\ /g')
+
+  # If matching project path was found and curr string contains a /, then complete project sub-directories
+  if [[ -n "$base_path" && $curw == */* ]]; then
+    local search_path=$(echo "$curw" | sed "s:^${project/\\/\\\\\\}::")
+    reply=(`ls "$base_path/$project" | awk '{print $NF}' | \grep -v ".git" | sed -e "s:^:$project/:" -e "s:$:/:"`)
+
+  # If curr string starts with /, tab complete top-level directories in root project dir
+  elif ([ $shell = "bash" ] && [ "${curw:0:1}" = "/" ]) || \
+       ([ $shell = "zsh" ]  && [ "${curw[1,1]}"  = "/" ]); then
+    reply=(`ls "$GIT_REPO_DIR" | awk '{print $NF}' | sed -e "s:$GIT_REPO_DIR/::" -e "s:^:/:"`)
+
+  # If curr string starts with --, tab complete commands
+  elif ([ $shell = "bash" ] && [ "${curw:0:2}" = "--" ]) || \
+       ([ $shell = "zsh" ]  && [ "${curw[1,2]}"  = "--" ]); then
+    local commands="--list\n--rebuild\n--update-all\n--batch-cmd\n--count-by-host"
+    reply=(`echo -e "\n"$commands`)
+
+  # Else, tab complete the entries in .git_index
+  else
+    reply=(`sed -e "s:.*/::" -e "s:$:/:" "$GIT_REPO_DIR/.git_index" | sort`)
+  fi
+  IFS=$' \t\n'
+  return 0
+
+}
